@@ -8,6 +8,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
+import time
 
 
 class ModelD(nn.Module):
@@ -77,7 +78,7 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 
-def train(args):
+def train(args, device):
     batch_size = args.batch_size
     net_G = ModelG(args.nz).to(device)
     net_G.apply(weights_init)
@@ -92,7 +93,7 @@ def train(args):
         net_D.load_state_dict(torch.load(args.netD))
 
     # dataloader
-    train_dataset = datasets.MNIST(root='datas', train=True, download=False, transform=transforms.ToTensor())
+    train_dataset = datasets.MNIST(root='datasets', train=True, download=False, transform=transforms.ToTensor())
     train_loader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size)
     fixed_noise = torch.randn(SAMPLE_SIZE, args.nz).to(device)
     fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
@@ -167,8 +168,25 @@ def train(args):
             torch.save({'state_dict': net_G.state_dict()}, '{}/model_g_epoch_{}.pth'.format(args.save_dir, epoch_idx))
 
 
-def test():
-    pass
+def test(args, device):
+    net_G = ModelG(args.nz).to(device)
+
+    assert args.netG != '', 'netG must not null'
+    # load model
+    net_G.load_state_dict(torch.load(args.netG))
+
+    # test input
+    fixed_noise = torch.randn(SAMPLE_SIZE, args.nz).to(device)
+    fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
+    for i in range(NUM_LABELS):
+        for j in range(SAMPLE_SIZE // NUM_LABELS):
+            fixed_labels[i * (SAMPLE_SIZE // NUM_LABELS) + j, i] = 1.0
+
+    net_G.eval()
+
+    g_out = net_G(fixed_noise, fixed_labels).view(SAMPLE_SIZE, 1, 28, 28).cpu()
+    date = time.strftime("%Y-%m-%d_%H_%M_%S")
+    save_image(g_out, '{}/{}.png'.format(args.test_dir, date))
 
 
 INPUT_SIZE = 784
@@ -188,6 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--out_paths', default='outputs', type=str, help='Path to save the trained models.')
     parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
     parser.add_argument('--samples_dir', type=str, default='samples', help='Path to save the output samples.')
+    parser.add_argument('--test_dir', type=str, default='tests', help='Path to save the output samples.')
     parser.add_argument('--netG', default='', help="path to netG (to continue training)")
     parser.add_argument('--netD', default='', help="path to netD (to continue training)")
     parser.add_argument('--epoch_start', default=1, help="epoch count")
@@ -198,14 +217,17 @@ if __name__ == '__main__':
     # make folders
     args.save_dir = os.path.join(args.out_paths, args.save_dir)
     args.samples_dir = os.path.join(args.out_paths, args.samples_dir)
+    args.test_dir = os.path.join(args.out_paths, args.test_dir)
     if not os.path.exists(args.out_paths):
         os.mkdir(args.out_paths)
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
     if not os.path.exists(args.samples_dir):
         os.mkdir(args.samples_dir)
+    if not os.path.exists(args.test_dir):
+        os.mkdir(args.test_dir)
 
     if args.is_train:
-        train(args)
+        train(args, device)
     else:
-        test(args)
+        test(args, device)
