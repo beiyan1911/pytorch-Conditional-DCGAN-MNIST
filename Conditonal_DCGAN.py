@@ -199,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate (default=0.01)')
     parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs.')
     parser.add_argument('--nz', type=int, default=100, help='Number of dimensions for input noise.')
-    parser.add_argument('--cuda', default=False, help='Enable cuda')
+    parser.add_argument('--cuda', default=True, help='Enable cuda')
     parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
     parser.add_argument('--print_every', type=int, default=50,
                         help='After how many epochs to print loss and save output samples.')
@@ -207,6 +207,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
     parser.add_argument('--samples_dir', type=str, default='samples', help='Path to save the output samples.')
     parser.add_argument('--test_dir', type=str, default='tests', help='Path to save the output samples.')
+    # outputs/models/model_g_epoch_9.pth
     parser.add_argument('--netG', default='', help="path to netG (to continue training)")
     parser.add_argument('--netD', default='', help="path to netD (to continue training)")
     parser.add_argument('--epoch_start', default=1, help="epoch count")
