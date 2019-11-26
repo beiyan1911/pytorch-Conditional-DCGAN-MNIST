@@ -68,71 +68,56 @@ class ModelG(nn.Module):
         return x
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Conditional DCGAN')
-    parser.add_argument('--batch_size', type=int, default=128, help='Batch size (default=128)')
-    parser.add_argument('--lr', type=float, default=0.01, help='Learning rate (default=0.01)')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs.')
-    parser.add_argument('--nz', type=int, default=100, help='Number of dimensions for input noise.')
-    parser.add_argument('--cuda', default=False, help='Enable cuda')
-    parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
-    parser.add_argument('--print_every', type=int, default=50,
-                        help='After how many epochs to print loss and save output samples.')
-    parser.add_argument('--out_paths', default='outputs', type=str, help='Path to save the trained models.')
-    parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
-    parser.add_argument('--samples_dir', type=str, default='samples', help='Path to save the output samples.')
-    args = parser.parse_args()
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
 
-    device = torch.device("cuda:0" if args.cuda else "cpu")
-    args.save_dir = os.path.join(args.out_paths, args.save_dir)
-    args.samples_dir = os.path.join(args.out_paths, args.samples_dir)
 
-    if not os.path.exists(args.out_paths):
-        os.mkdir(args.out_paths)
-    if not os.path.exists(args.save_dir):
-        os.mkdir(args.save_dir)
-    if not os.path.exists(args.samples_dir):
-        os.mkdir(args.samples_dir)
+def train(args):
+    batch_size = args.batch_size
+    net_G = ModelG(args.nz).to(device)
+    net_G.apply(weights_init)
+    net_D = ModelD().to(device)
+    net_D.apply(weights_init)
+    criterion = nn.BCELoss()
 
-    INPUT_SIZE = 784
-    SAMPLE_SIZE = 80
-    NUM_LABELS = 10
+    # load model
+    if args.netG != '':
+        net_G.load_state_dict(torch.load(args.netG))
+    if args.netD != '':
+        net_D.load_state_dict(torch.load(args.netD))
+
+    # dataloader
     train_dataset = datasets.MNIST(root='datas', train=True, download=False, transform=transforms.ToTensor())
     train_loader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size)
-
-    model_d = ModelD().to(device)
-    model_g = ModelG(args.nz).to(device)
-    criterion = nn.BCELoss()
-    # torch.random
-
     fixed_noise = torch.randn(SAMPLE_SIZE, args.nz).to(device)
     fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
+    real_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
+    fake_label = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
 
     for i in range(NUM_LABELS):
         for j in range(SAMPLE_SIZE // NUM_LABELS):
             fixed_labels[i * (SAMPLE_SIZE // NUM_LABELS) + j, i] = 1.0
 
-    optim_d = optim.SGD(model_d.parameters(), lr=args.lr)
-    optim_g = optim.SGD(model_g.parameters(), lr=args.lr)
-
-    real_label = 1
-    fake_label = 0
+    optim_d = optim.SGD(net_D.parameters(), lr=args.lr)
+    optim_g = optim.SGD(net_G.parameters(), lr=args.lr)
 
     for epoch_idx in range(args.epochs):
-        model_d.train()
-        model_g.train()
+        net_D.train()
+        net_G.train()
 
-        d_loss = 0.0
-        g_loss = 0.0
+        d_loss, g_loss = 0.0, 0.0
+
         for batch_idx, (train_x, train_y) in enumerate(train_loader):
-            batch_size = train_x.size(0)
             input = train_x.view(-1, INPUT_SIZE).to(device)
-            real_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
-            fake_label = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, train_y.view(batch_size, 1), 1).to(device)
 
             # optim D
-            output = model_d(input, one_hot_labels)
+            output = net_D(input, one_hot_labels)
             optim_d.zero_grad()
             errD_real = criterion(output, real_label)
             errD_real.backward()
@@ -142,8 +127,8 @@ if __name__ == '__main__':
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
             noise = torch.randn(batch_size, args.nz).to(device)
 
-            g_out = model_g(noise, one_hot_labels)
-            output = model_d(g_out, one_hot_labels)
+            g_out = net_G(noise, one_hot_labels)
+            output = net_D(g_out, one_hot_labels)
             errD_fake = criterion(output, fake_label)
 
             fakeD_mean = output.data.cpu().mean()
@@ -155,8 +140,8 @@ if __name__ == '__main__':
             noise = torch.randn(batch_size, args.nz).to(device)
             rand_y = torch.from_numpy(np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
-            g_out = model_g(noise, one_hot_labels)
-            output = model_d(g_out, one_hot_labels)
+            g_out = net_G(noise, one_hot_labels)
+            output = net_D(g_out, one_hot_labels)
             errG = criterion(output, real_label)
             optim_g.zero_grad()
             errG.backward()
@@ -170,7 +155,7 @@ if __name__ == '__main__':
                         format(epoch_idx, batch_idx, len(train_loader), fakeD_mean,
                                realD_mean))
 
-                g_out = model_g(fixed_noise, fixed_labels).view(SAMPLE_SIZE, 1, 28, 28).cpu()
+                g_out = net_G(fixed_noise, fixed_labels).view(SAMPLE_SIZE, 1, 28, 28).cpu()
                 save_image(g_out,
                            '{}/{}_{}.png'.format(
                                args.samples_dir, epoch_idx, batch_idx))
@@ -178,9 +163,49 @@ if __name__ == '__main__':
         print('Epoch {} - D loss = {:.4f}, G loss = {:.4f}'.format(epoch_idx,
                                                                    d_loss, g_loss))
         if epoch_idx % args.save_every == 0:
-            torch.save({'state_dict': model_d.state_dict()},
-                       '{}/model_d_epoch_{}.pth'.format(
-                           args.save_dir, epoch_idx))
-            torch.save({'state_dict': model_g.state_dict()},
-                       '{}/model_g_epoch_{}.pth'.format(
-                           args.save_dir, epoch_idx))
+            torch.save({'state_dict': net_D.state_dict()}, '{}/model_d_epoch_{}.pth'.format(args.save_dir, epoch_idx))
+            torch.save({'state_dict': net_G.state_dict()}, '{}/model_g_epoch_{}.pth'.format(args.save_dir, epoch_idx))
+
+
+def test():
+    pass
+
+
+INPUT_SIZE = 784
+SAMPLE_SIZE = 80
+NUM_LABELS = 10
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('Conditional DCGAN')
+    parser.add_argument('--batch_size', type=int, default=128, help='Batch size (default=128)')
+    parser.add_argument('--lr', type=float, default=0.01, help='Learning rate (default=0.01)')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs.')
+    parser.add_argument('--nz', type=int, default=100, help='Number of dimensions for input noise.')
+    parser.add_argument('--cuda', default=False, help='Enable cuda')
+    parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
+    parser.add_argument('--print_every', type=int, default=50,
+                        help='After how many epochs to print loss and save output samples.')
+    parser.add_argument('--out_paths', default='outputs', type=str, help='Path to save the trained models.')
+    parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
+    parser.add_argument('--samples_dir', type=str, default='samples', help='Path to save the output samples.')
+    parser.add_argument('--netG', default='', help="path to netG (to continue training)")
+    parser.add_argument('--netD', default='', help="path to netD (to continue training)")
+    parser.add_argument('--epoch_start', default=1, help="epoch count")
+    parser.add_argument('--is_train', default=True, type=bool, help="train or test")
+    args = parser.parse_args()
+
+    device = torch.device("cuda:0" if args.cuda else "cpu")
+    # make folders
+    args.save_dir = os.path.join(args.out_paths, args.save_dir)
+    args.samples_dir = os.path.join(args.out_paths, args.samples_dir)
+    if not os.path.exists(args.out_paths):
+        os.mkdir(args.out_paths)
+    if not os.path.exists(args.save_dir):
+        os.mkdir(args.save_dir)
+    if not os.path.exists(args.samples_dir):
+        os.mkdir(args.samples_dir)
+
+    if args.is_train:
+        train(args)
+    else:
+        test(args)
