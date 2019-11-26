@@ -78,11 +78,17 @@ if __name__ == '__main__':
     parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
     parser.add_argument('--print_every', type=int, default=50,
                         help='After how many epochs to print loss and save output samples.')
+    parser.add_argument('--out_paths', default='outputs', type=str, help='Path to save the trained models.')
     parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
     parser.add_argument('--samples_dir', type=str, default='samples', help='Path to save the output samples.')
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if args.cuda else "cpu")
+    args.save_dir = os.path.join(args.out_paths, args.save_dir)
+    args.samples_dir = os.path.join(args.out_paths, args.samples_dir)
+
+    if not os.path.exists(args.out_paths):
+        os.mkdir(args.out_paths)
     if not os.path.exists(args.save_dir):
         os.mkdir(args.save_dir)
     if not os.path.exists(args.samples_dir):
@@ -91,39 +97,21 @@ if __name__ == '__main__':
     INPUT_SIZE = 784
     SAMPLE_SIZE = 80
     NUM_LABELS = 10
-    train_dataset = datasets.MNIST(root='datas',
-                                   train=True,
-                                   download=False,
-                                   transform=transforms.ToTensor())
-    train_loader = DataLoader(train_dataset, shuffle=True,
-                              batch_size=args.batch_size)
+    train_dataset = datasets.MNIST(root='datas', train=True, download=False, transform=transforms.ToTensor())
+    train_loader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size)
 
     model_d = ModelD().to(device)
     model_g = ModelG(args.nz).to(device)
     criterion = nn.BCELoss()
-    # input = torch.FloatTensor(args.batch_size, INPUT_SIZE)
-    # noise = torch.FloatTensor(args.batch_size, (args.nz))
 
-    # fixed_noise = torch.FloatTensor(SAMPLE_SIZE, args.nz).normal_(0, 1)
     fixed_noise = torch.from_numpy(np.random.normal(0, 1.0, (SAMPLE_SIZE, args.nz)).astype(np.float32)).to(device)
     fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
     for i in range(NUM_LABELS):
         for j in range(SAMPLE_SIZE // NUM_LABELS):
             fixed_labels[i * (SAMPLE_SIZE // NUM_LABELS) + j, i] = 1.0
 
-    # label = torch.FloatTensor(args.batch_size)
-    # one_hot_labels = torch.FloatTensor(args.batch_size, 10)
-    # if args.cuda:
-    #
-    #     input, label = input.cuda(), label.cuda()
-    #     noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
-    #     one_hot_labels = one_hot_labels.cuda()
-    #     fixed_labels = fixed_labels.cuda()
-
     optim_d = optim.SGD(model_d.parameters(), lr=args.lr)
     optim_g = optim.SGD(model_g.parameters(), lr=args.lr)
-    # fixed_noise = Variable(fixed_noise)
-    # fixed_labels = Variable(fixed_labels)
 
     real_label = 1
     fake_label = 0
@@ -137,19 +125,9 @@ if __name__ == '__main__':
         for batch_idx, (train_x, train_y) in enumerate(train_loader):
             batch_size = train_x.size(0)
             input = train_x.view(-1, INPUT_SIZE).to(device)
-            # train_y = train_y.short()
-            # input = train_x.to(device)
-
-            # input.resize_as_(train_x).copy_(train_x)
-            # label.resize_(batch_size).fill_(real_label)
-            real_label = torch.ones((batch_size,1), dtype=torch.float32).to(device)
-            fake_label = torch.ones((batch_size,1), dtype=torch.float32).to(device)
-            # one_hot_labels.resize_(batch_size, NUM_LABELS).zero_()
-            # one_hot_labels.scatter_(1, train_y.view(batch_size, 1), 1)
+            real_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
+            fake_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, train_y.view(batch_size, 1), 1).to(device)
-            # torch.scalar_tensor()
-            # inputv = Variable(input)
-            # labelv = Variable(label)
 
             output = model_d(input, one_hot_labels)
             optim_d.zero_grad()
@@ -157,18 +135,10 @@ if __name__ == '__main__':
             errD_real.backward()
             realD_mean = output.data.cpu().mean()
 
-            # one_hot_labels.zero_()
             rand_y = torch.from_numpy(
                 np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
-            # one_hot_labels.scatter_(1, rand_y.view(batch_size, 1), 1)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
-            # noise.resize_(batch_size, args.nz).normal_(0, 1)
             noise = torch.from_numpy(np.random.normal(0, 1.0, (batch_size, args.nz)).astype(np.float32)).to(device)
-            # label.resize_(batch_size).fill_(fake_label)
-            # fake_label = torch.zeros()
-            # noisev = Variable(noise)
-            # labelv = Variable(label)
-            # onehotv = Variable(one_hot_labels)
             g_out = model_g(noise, one_hot_labels)
             output = model_d(g_out, one_hot_labels)
             errD_fake = criterion(output, fake_label)
@@ -176,19 +146,11 @@ if __name__ == '__main__':
             errD = errD_real + errD_fake
             errD_fake.backward()
             optim_d.step()
-
-            # train the G
-            # noise.normal_(0, 1)
             noise = torch.from_numpy(np.random.normal(0, 1.0, (batch_size, args.nz)).astype(np.float32)).to(device)
             one_hot_labels.zero_()
             rand_y = torch.from_numpy(
                 np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
-            # one_hot_labels.scatter_(1, rand_y.view(batch_size, 1), 1)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
-            # label.resize_(batch_size).fill_(real_label)
-            # onehotv = Variable(one_hot_labels)
-            # noisev = Variable(noise)
-            # labelv = Variable(label)
             g_out = model_g(noise, one_hot_labels)
             output = model_d(g_out, one_hot_labels)
             errG = criterion(output, real_label)
@@ -196,9 +158,7 @@ if __name__ == '__main__':
             errG.backward()
             optim_g.step()
 
-            # d_loss += errD.data[0]
             d_loss += errD.item()
-            # g_loss += errG.data[0]
             g_loss += errG.item()
             if batch_idx % args.print_every == 0:
                 print(
