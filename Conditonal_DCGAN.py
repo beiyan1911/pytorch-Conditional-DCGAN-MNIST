@@ -88,9 +88,9 @@ def train(args, device):
 
     # load model
     if args.netG != '':
-        net_G.load_state_dict(torch.load(args.netG))
+        net_G.load_state_dict(torch.load(args.netG)['state_dict'])
     if args.netD != '':
-        net_D.load_state_dict(torch.load(args.netD))
+        net_D.load_state_dict(torch.load(args.netD)['state_dict'])
 
     # dataloader
     train_dataset = datasets.MNIST(root='datasets', train=True, download=False, transform=transforms.ToTensor())
@@ -107,13 +107,15 @@ def train(args, device):
     optim_d = optim.SGD(net_D.parameters(), lr=args.lr)
     optim_g = optim.SGD(net_G.parameters(), lr=args.lr)
 
-    for epoch_idx in range(args.epochs):
+    for epoch_idx in range(args.epoch_start, args.epochs):
         net_D.train()
         net_G.train()
 
         d_loss, g_loss = 0.0, 0.0
 
         for batch_idx, (train_x, train_y) in enumerate(train_loader):
+            if train_x.size(0) != batch_size:
+                continue
             input = train_x.view(-1, INPUT_SIZE).to(device)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, train_y.view(batch_size, 1), 1).to(device)
 
@@ -152,7 +154,7 @@ def train(args, device):
             g_loss += errG.item()
             if batch_idx % args.print_every == 0:
                 print(
-                    "\t{} ({} / {}) mean D(fake) = {:.4f}, mean D(real) = {:.4f}".
+                    "\tEpoch {} ({} / {}) mean D(fake) = {:.4f}, mean D(real) = {:.4f}".
                         format(epoch_idx, batch_idx, len(train_loader), fakeD_mean,
                                realD_mean))
 
@@ -173,11 +175,11 @@ def test(args, device):
 
     assert args.netG != '', 'netG must not null'
     # load model
-    net_G.load_state_dict(torch.load(args.netG))
+    net_G.load_state_dict(torch.load(args.netG)['state_dict'])
 
     # test input
-    fixed_noise = torch.randn(SAMPLE_SIZE, args.nz).to(device)
-    fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
+    fixed_noise = torch.randn(TEST_SIZE, args.nz).to(device)
+    fixed_labels = torch.zeros(TEST_SIZE, NUM_LABELS).to(device)
     for i in range(NUM_LABELS):
         for j in range(SAMPLE_SIZE // NUM_LABELS):
             fixed_labels[i * (SAMPLE_SIZE // NUM_LABELS) + j, i] = 1.0
@@ -191,6 +193,7 @@ def test(args, device):
 
 INPUT_SIZE = 784
 SAMPLE_SIZE = 80
+TEST_SIZE = 80
 NUM_LABELS = 10
 
 if __name__ == '__main__':
@@ -210,8 +213,8 @@ if __name__ == '__main__':
     # outputs/models/model_g_epoch_9.pth
     parser.add_argument('--netG', default='', help="path to netG (to continue training)")
     parser.add_argument('--netD', default='', help="path to netD (to continue training)")
-    parser.add_argument('--epoch_start', default=1, help="epoch count")
-    parser.add_argument('--is_train', default=True, type=bool, help="train or test")
+    parser.add_argument('--epoch_start', default=2, help="epoch count")
+    parser.add_argument('--is_train', default=False, type=bool, help="train or test")
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if args.cuda else "cpu")
