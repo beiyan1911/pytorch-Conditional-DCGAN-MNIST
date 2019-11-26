@@ -107,7 +107,7 @@ def train(args, device):
     optim_d = optim.SGD(net_D.parameters(), lr=args.lr)
     optim_g = optim.SGD(net_G.parameters(), lr=args.lr)
 
-    for epoch_idx in range(args.epoch_start, args.epochs):
+    for epoch_idx in range(args.epoch_start, args.epochs + 1):
         net_D.train()
         net_G.train()
 
@@ -213,8 +213,8 @@ if __name__ == '__main__':
     # outputs/models/model_g_epoch_9.pth
     parser.add_argument('--netG', default='', help="path to netG (to continue training)")
     parser.add_argument('--netD', default='', help="path to netD (to continue training)")
-    parser.add_argument('--epoch_start', default=2, help="epoch count")
-    parser.add_argument('--is_train', default=False, type=bool, help="train or test")
+    parser.add_argument('--epoch_start', default=1, help="epoch count")
+    parser.add_argument('--is_train', default=True, type=bool, help="train or test")
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if args.cuda else "cpu")
