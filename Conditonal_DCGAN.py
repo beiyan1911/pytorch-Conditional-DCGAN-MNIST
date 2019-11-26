@@ -74,7 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate (default=0.01)')
     parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs.')
     parser.add_argument('--nz', type=int, default=100, help='Number of dimensions for input noise.')
-    parser.add_argument('--cuda', default=True, help='Enable cuda')
+    parser.add_argument('--cuda', default=False, help='Enable cuda')
     parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
     parser.add_argument('--print_every', type=int, default=50,
                         help='After how many epochs to print loss and save output samples.')
@@ -103,9 +103,11 @@ if __name__ == '__main__':
     model_d = ModelD().to(device)
     model_g = ModelG(args.nz).to(device)
     criterion = nn.BCELoss()
+    # torch.random
 
-    fixed_noise = torch.from_numpy(np.random.normal(0, 1.0, (SAMPLE_SIZE, args.nz)).astype(np.float32)).to(device)
+    fixed_noise = torch.randn(SAMPLE_SIZE, args.nz).to(device)
     fixed_labels = torch.zeros(SAMPLE_SIZE, NUM_LABELS).to(device)
+
     for i in range(NUM_LABELS):
         for j in range(SAMPLE_SIZE // NUM_LABELS):
             fixed_labels[i * (SAMPLE_SIZE // NUM_LABELS) + j, i] = 1.0
@@ -126,30 +128,32 @@ if __name__ == '__main__':
             batch_size = train_x.size(0)
             input = train_x.view(-1, INPUT_SIZE).to(device)
             real_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
-            fake_label = torch.ones((batch_size, 1), dtype=torch.float32).to(device)
+            fake_label = torch.zeros((batch_size, 1), dtype=torch.float32).to(device)
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, train_y.view(batch_size, 1), 1).to(device)
 
+            # optim D
             output = model_d(input, one_hot_labels)
             optim_d.zero_grad()
             errD_real = criterion(output, real_label)
             errD_real.backward()
             realD_mean = output.data.cpu().mean()
 
-            rand_y = torch.from_numpy(
-                np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
+            rand_y = torch.from_numpy(np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
-            noise = torch.from_numpy(np.random.normal(0, 1.0, (batch_size, args.nz)).astype(np.float32)).to(device)
+            noise = torch.randn(batch_size, args.nz).to(device)
+
             g_out = model_g(noise, one_hot_labels)
             output = model_d(g_out, one_hot_labels)
             errD_fake = criterion(output, fake_label)
+
             fakeD_mean = output.data.cpu().mean()
             errD = errD_real + errD_fake
             errD_fake.backward()
             optim_d.step()
-            noise = torch.from_numpy(np.random.normal(0, 1.0, (batch_size, args.nz)).astype(np.float32)).to(device)
-            one_hot_labels.zero_()
-            rand_y = torch.from_numpy(
-                np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
+
+            # optim G
+            noise = torch.randn(batch_size, args.nz).to(device)
+            rand_y = torch.from_numpy(np.random.randint(0, NUM_LABELS, size=(batch_size, 1), dtype='int64'))
             one_hot_labels = torch.zeros(batch_size, NUM_LABELS).scatter_(1, rand_y.view(batch_size, 1), 1).to(device)
             g_out = model_g(noise, one_hot_labels)
             output = model_d(g_out, one_hot_labels)
