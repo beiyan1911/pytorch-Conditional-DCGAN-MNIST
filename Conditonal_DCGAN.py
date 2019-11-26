@@ -199,12 +199,12 @@ NUM_LABELS = 10
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Conditional DCGAN')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size (default=128)')
-    parser.add_argument('--lr', type=float, default=0.01, help='Learning rate (default=0.01)')
-    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs.')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate (default=0.01)')
+    parser.add_argument('--epochs', type=int, default=30, help='Number of training epochs.')
     parser.add_argument('--nz', type=int, default=100, help='Number of dimensions for input noise.')
     parser.add_argument('--cuda', default=True, help='Enable cuda')
-    parser.add_argument('--save_every', type=int, default=1, help='After how many epochs to save the model.')
-    parser.add_argument('--print_every', type=int, default=50,
+    parser.add_argument('--save_every', type=int, default=2, help='After how many epochs to save the model.')
+    parser.add_argument('--print_every', type=int, default=100,
                         help='After how many epochs to print loss and save output samples.')
     parser.add_argument('--out_paths', default='outputs', type=str, help='Path to save the trained models.')
     parser.add_argument('--save_dir', type=str, default='models', help='Path to save the trained models.')
