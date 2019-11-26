@@ -186,14 +186,14 @@ def test(args, device):
 
     net_G.eval()
 
-    g_out = net_G(fixed_noise, fixed_labels).view(SAMPLE_SIZE, 1, 28, 28).cpu()
+    g_out = net_G(fixed_noise, fixed_labels).view(TEST_SIZE, 1, 28, 28).cpu()
     date = time.strftime("%Y-%m-%d_%H_%M_%S")
     save_image(g_out, '{}/{}.png'.format(args.test_dir, date))
 
 
 INPUT_SIZE = 784
 SAMPLE_SIZE = 80
-TEST_SIZE = 80
+TEST_SIZE = 200
 NUM_LABELS = 10
 
 if __name__ == '__main__':
